@@ -13,15 +13,10 @@ const QR_APIS = [
     timeout: 5000
   },
   {
-    name: 'QRBit',
-    url: (text) => `https://qrbit.ly/qr?text=${encodeURIComponent(text)}&size=200`,
-    timeout: 8000
-  },
-  {
     name: 'API Ninjas',
     url: (text) => `https://api.api-ninjas.com/v1/qrcode?data=${encodeURIComponent(text)}&format=png&size=200`,
     timeout: 5000,
-    headers: { 'X-Api-Key': 'demo' } // 使用demo key，有限制但可用
+    headers: { 'X-Api-Key': 'YqERyTsTYXzceCD4a1AwpA==Mwnc0KYDglCkYSf0','Accept':'image/png'} // 每月限制 10000 次请求
   }
 ];
 
