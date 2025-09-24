@@ -73,7 +73,7 @@ We take your privacy seriously. This privacy policy explains how the "Text to QR
 本扩展使用以下第三方API服务来生成二维码：
 
 ### QR Server (api.qrserver.com)
-- **隐私政策**：[QR Server Privacy Policy](https://goqr.me/privacy/)
+- **隐私政策**：[QR Server Privacy Policy](https://goqr.me/de/rechtliches/datenschutz-goqrme.html)
 - **数据处理**：文本用于生成二维码图片，不存储
 
 ### QuickChart (quickchart.io)
@@ -81,7 +81,7 @@ We take your privacy seriously. This privacy policy explains how the "Text to QR
 - **数据处理**：临时处理文本生成图片，不长期存储
 
 ### API Ninjas (api.api-ninjas.com)
-- **隐私政策**：[API Ninjas Privacy Policy](https://api.api-ninjas.com/privacy)
+- **隐私政策**：[API Ninjas Privacy Policy](https://api-ninjas.com/privacy)
 - **数据处理**：使用demo密钥，有请求限制，不存储数据
 
 这些服务都通过HTTPS加密连接，确保数据传输安全。
