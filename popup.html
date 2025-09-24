@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      height: 500px;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    .tabs {
+      display: flex;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+      flex-shrink: 0;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 14px;
+      color: #6c757d;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      color: #007bff;
+      background: white;
+      border-bottom: 2px solid #007bff;
+    }
+
+    .tab:hover {
+      background: #e9ecef;
+    }
+
+    .tab.active:hover {
+      background: white;
+    }
+
+    .tab-content {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-content-inner {
+      padding: 20px;
+      flex: 1;
+    }
+
+    .qr-container {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #qrcode {
+      margin: 10px auto;
+      padding: 10px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 200px;
+    }
+
+    #qrcode img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .text-info {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      word-break: break-all;
+      font-size: 12px;
+      max-height: 60px;
+      overflow-y: auto;
+      border-left: 3px solid #007bff;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .btn-download {
+      background: #28a745;
+      color: white;
+      flex: 1;
+    }
+
+    .btn-copy {
+      background: #007bff;
+      color: white;
+      flex: 1;
+    }
+
+    .btn-clear {
+      background: #dc3545;
+      color: white;
+      flex: 1;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #6c757d;
+      padding: 40px 20px;
+    }
+
+    .empty-state .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Settings Tab Styles */
+    .setting-group {
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .setting-group:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .setting-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #343a40;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .setting-desc {
+      font-size: 12px;
+      color: #6c757d;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    input:checked + .slider {
+      background-color: #28a745;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #495057;
+      margin-bottom: 4px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+    }
+
+    .btn-test {
+      background: #17a2b8;
+      color: white;
+      font-size: 11px;
+      padding: 6px 12px;
+      margin-top: 8px;
+    }
+
+    .btn-save {
+      background: #28a745;
+      color: white;
+      width: calc(100% - 40px);
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 500;
+      margin: 0 20px 20px 20px;
+      position: sticky;
+      bottom: 0;
+      display: none;
+      z-index: 100;
+      border-radius: 6px;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+
+    .btn-save.show {
+      display: block;
+    }
+
+    .custom-api-section {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #e9ecef;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .status-indicator.enabled {
+      background: #28a745;
+    }
+
+    .status-indicator.disabled {
+      background: #6c757d;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📱 二维码生成器</h1>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="qr">二维码</button>
+    <button class="tab" data-tab="settings">设置</button>
+  </div>
+
+  <div id="qr-tab" class="tab-content active">
+    <div class="tab-content-inner">
+      <div id="content">
+        <div class="empty-state">
+          <div class="icon">📱</div>
+          <p>在网页中选择文字，然后点击绿色按钮生成二维码</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-tab" class="tab-content">
+    <div class="tab-content-inner">
+      <div class="setting-group">
+        <div class="setting-title">
+          <span class="status-indicator" id="button-status"></span>
+          🎯 选择按钮控制
+        </div>
+        <div class="setting-desc">控制是否在选中文字时显示绿色生成按钮</div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="show-button-toggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-title">
+          <span class="status-indicator" id="api-status"></span>
+          🔧 自定义API
+        </div>
+        <div class="setting-desc">使用您自己的二维码生成API，提高隐私安全性</div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="custom-api-toggle">
+          <span class="slider"></span>
+        </label>
+
+        <div class="custom-api-section" id="custom-api-config" style="display: none; margin-top: 12px;">
+          <div class="form-group">
+            <label class="form-label">API 地址</label>
+            <input type="text" class="form-input" id="custom-api-url" placeholder="https://your-api.com/qr?text={TEXT}&size=200">
+          </div>
+          <div class="form-group">
+            <label class="form-label">请求头 (可选，JSON格式)</label>
+            <input type="text" class="form-input" id="custom-api-headers" placeholder='{"Authorization": "Bearer YOUR_TOKEN"}'>
+          </div>
+          <div class="form-group">
+            <label class="form-label">超时时间 (毫秒)</label>
+            <input type="number" class="form-input" id="custom-api-timeout" value="5000" min="1000" max="30000">
+          </div>
+          <button class="btn-test" id="test-custom-api">测试 API</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn-save" id="save-settings">保存设置</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

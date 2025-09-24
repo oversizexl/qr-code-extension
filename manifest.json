@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "划词生成二维码",
+  "version": "1.0.0",
+  "description": "在任意网页选择文字，一键生成二维码。支持右键菜单、历史记录管理，方便手机扫码获取内容。",
+  "author": "Sherlock",
+  "homepage_url": "https://github.com/oversizexl/qr-code-extension",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "生成二维码",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "host_permissions": [
+    "https://api.qrserver.com/*",
+    "https://quickchart.io/*",
+    "https://qrbit.ly/*",
+    "https://api.api-ninjas.com/*"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js -o \"/Users/sherlock/QR code/qrcode.min.js\")",
+      "Bash(sips -z 16 16 \"/Users/sherlock/QR code/logo.png\" --out \"/Users/sherlock/QR code/icon16.png\")",
+      "Bash(sips -z 48 48 \"/Users/sherlock/QR code/logo.png\" --out \"/Users/sherlock/QR code/icon48.png\")",
+      "Bash(sips -z 128 128 \"/Users/sherlock/QR code/logo.png\" --out \"/Users/sherlock/QR code/icon128.png\")",
+      "Bash(sips -z 16 16 \"logo.png\" --out \"icon16.png\")",
+      "Bash(sips -z 48 48 \"logo.png\" --out \"icon48.png\")",
+      "Bash(sips -z 128 128 \"logo.png\" --out \"icon128.png\")",
+      "Bash(mkdir -p images)",
+      "Bash(mv logo.png icon16.png icon48.png icon128.png images/)",
+      "Bash(zip -r qr-code-extension-v1.0.0.zip . -x \"*.DS_Store\" \"*/.claude/*\" \"*.git/*\" \"README.md\" \"*.md\")",
+      "Bash(rm qr-code-extension-v1.0.0.zip)",
+      "Bash(zip -r qr-code-extension-v1.0.0.zip manifest.json background.js content.js content.css popup.html popup.js images/)",
+      "Bash(unzip -l qr-code-extension-v1.0.0.zip)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
