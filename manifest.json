@@ -38,7 +38,6 @@
   "host_permissions": [
     "https://api.qrserver.com/*",
     "https://quickchart.io/*",
-    "https://qrbit.ly/*",
     "https://api.api-ninjas.com/*"
   ]
 }
