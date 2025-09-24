@@ -71,12 +71,6 @@
 
 ## 🔧 开发说明
 
-### 依赖的API服务
-- QR Server API
-- QuickChart API
-- QRBit API
-- API Ninjas（使用demo key）
-
 ### 本地开发
 1. 克隆项目：`git clone <repo-url>`
 2. 按照安装方法加载到 Chrome
