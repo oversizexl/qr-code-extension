@@ -58,6 +58,91 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   return true;
 });
 
+// 新的优先级逻辑：根据自定义API开关状态决定生成顺序
+async function generateQRCodeWithPriority(text, tabId) {
+  console.log('Background - Generating QR with priority logic for:', text);
+  const startTime = Date.now();
+
+  // 获取设置
+  const settings = await new Promise((resolve) => {
+    chrome.storage.local.get([
+      'useCustomApi',
+      'customApiUrl',
+      'customApiHeaders',
+      'customApiTimeout'
+    ], resolve);
+  });
+
+  console.log('Background - loaded settings:', settings);
+
+  // 检查自定义API是否已配置且有效
+  const isCustomApiConfigured = settings.useCustomApi &&
+      settings.customApiUrl &&
+      settings.customApiUrl.includes('{TEXT}') &&
+      (settings.customApiUrl.startsWith('http://') || settings.customApiUrl.startsWith('https://'));
+
+  if (settings.useCustomApi && !isCustomApiConfigured) {
+    console.log('⚠️ Background - Custom API is enabled but not properly configured:', {
+      hasUrl: !!settings.customApiUrl,
+      hasTextPlaceholder: settings.customApiUrl?.includes('{TEXT}'),
+      hasValidProtocol: settings.customApiUrl?.startsWith('http://') || settings.customApiUrl?.startsWith('https://')
+    });
+  }
+
+  // 根据自定义API开关状态确定优先级
+  if (settings.useCustomApi && isCustomApiConfigured) {
+    // 自定义API开关开启且配置完整：自定义API -> 前端生成 -> 内置API
+    console.log('✅ Background - Custom API enabled: trying custom API first');
+
+    try {
+      const result = await generateCustomAPIQR(text, {
+        url: settings.customApiUrl,
+        headers: settings.customApiHeaders,
+        timeout: settings.customApiTimeout
+      });
+
+      if (result.success) {
+        console.log(`✅ Background - QR generated successfully with custom API in ${Date.now() - startTime}ms`);
+        sendQRToTab(text, result.qrDataURL, tabId);
+        return;
+      }
+      console.log('❌ Background - Custom API returned false but did not throw error');
+    } catch (error) {
+      console.log(`❌ Background - Custom API failed:`, error.message);
+    }
+
+    // 如果自定义API失败，通知content script尝试前端生成，然后再fallback到内置API
+    console.log('📱 Background - Requesting content script to try offline generation');
+    chrome.tabs.sendMessage(tabId, {
+      action: 'generateOfflineQR',
+      text: text
+    }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        console.log('📱 Background - Content script offline generation failed, using built-in APIs');
+        // 如果前端生成也失败，使用内置API
+        generateQRCodeWithMultipleAPIs(text, tabId);
+      }
+    });
+
+  } else {
+    // 自定义API开关关闭：前端生成 -> 内置API
+    console.log('ℹ️ Background - Custom API disabled: trying offline first');
+
+    // 先请求content script尝试前端生成
+    console.log('📱 Background - Requesting content script to try offline generation');
+    chrome.tabs.sendMessage(tabId, {
+      action: 'generateOfflineQR',
+      text: text
+    }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        console.log('📱 Background - Content script offline generation failed, using built-in APIs');
+        // 如果前端生成失败，使用内置API
+        generateQRCodeWithMultipleAPIs(text, tabId);
+      }
+    });
+  }
+}
+
 // 使用多个API生成二维码，确保高成功率
 async function generateQRCodeWithMultipleAPIs(text, tabId) {
   console.log('Generating QR with multiple APIs for:', text);
@@ -398,7 +483,7 @@ chrome.contextMenus.onClicked.addListener(function(info, tab) {
   if (info.menuItemId === "generateQRFromSelection") {
     console.log('Background - Right-click QR generation requested for:', info.selectionText);
 
-    // 直接使用统一的API生成逻辑（包括自定义API支持）
-    generateQRCodeWithMultipleAPIs(info.selectionText, tab.id);
+    // 使用新的优先级逻辑处理右键菜单
+    generateQRCodeWithPriority(info.selectionText, tab.id);
   }
 });

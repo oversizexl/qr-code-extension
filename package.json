@@ -1,9 +1,10 @@
 {
   "name": "qr-code-extension",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "description": "在任意网页选择文字，一键生成二维码。支持右键菜单、历史记录管理，方便手机扫码获取内容。",
   "scripts": {
-    "dev": "mkdir -p dist && zip -r dist/qr-code-extension-1.0.0.zip . -x '*.git*' 'node_modules/*' '*.DS_Store' 'package.json' 'package-lock.json' 'dist/*'"
+    "dev": "node scripts/build.js",
+    "build": "node scripts/build.js --production"
   },
   "author": "Sherlock",
   "license": "MIT"

@@ -9,6 +9,33 @@ let extensionSettings = {
   useCustomApi: false
 };
 
+// 检测系统主题
+function getSystemTheme() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+// 获取主题相关的颜色值
+function getThemeColors() {
+  const isDark = getSystemTheme() === 'dark';
+  return {
+    isDark,
+    background: isDark ? '#1e1e1e' : 'white',
+    sidebarHeader: isDark ? '#2d2d2d' : '#f8f9fa',
+    textPrimary: isDark ? '#e0e0e0' : '#333',
+    textSecondary: isDark ? '#ccc' : '#555',
+    border: isDark ? '#333' : '#e0e0e0',
+    selectedTextBg: isDark ? '#2d2d2d' : '#f5f5f5',
+    qrDisplayBg: isDark ? '#2d2d2d' : '#fafafa',
+    buttonCloseBg: isDark ? '#333' : '#e0e0e0',
+    toastBg: {
+      success: isDark ? '#2E7D32' : '#4CAF50',
+      error: isDark ? '#C62828' : '#f44336',
+      warning: isDark ? '#F57C00' : '#ff9800',
+      info: isDark ? '#1976D2' : '#333'
+    }
+  };
+}
+
 // 初始化扩展设置
 function initializeExtensionSettings() {
   chrome.storage.local.get([
@@ -31,6 +58,23 @@ function initializeExtensionSettings() {
 
 // 页面加载时初始化设置
 initializeExtensionSettings();
+
+// 监听系统主题变化
+if (window.matchMedia) {
+  const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  darkModeQuery.addEventListener('change', function(e) {
+    console.log('System theme changed to:', e.matches ? 'dark' : 'light');
+
+    // 如果当前有显示的侧边栏，重新应用主题
+    if (qrSidebar && qrSidebar.parentNode) {
+      const themeColors = getThemeColors();
+      qrSidebar.style.background = themeColors.background;
+      qrSidebar.style.color = themeColors.textPrimary;
+      qrSidebar.style.borderLeft = `1px solid ${themeColors.border}`;
+      qrSidebar.style.boxShadow = `-2px 0 10px rgba(0,0,0,${themeColors.isDark ? '0.3' : '0.1'})`;
+    }
+  });
+}
 document.addEventListener('mouseup', function(event) {
   // 延迟执行以确保选择完成
   setTimeout(() => {
@@ -371,6 +415,9 @@ function showSidebar(text, qrDataURL) {
     console.log('Previous sidebar cleaned up');
   }
 
+  // 获取主题颜色
+  const themeColors = getThemeColors();
+
   qrSidebar = document.createElement('div');
   qrSidebar.id = 'qr-sidebar';
   qrSidebar.innerHTML = `
@@ -393,19 +440,21 @@ function showSidebar(text, qrDataURL) {
     </div>
   `;
 
+  // 使用主题适应的样式
   qrSidebar.style.cssText = `
     position: fixed;
     top: 0;
     right: -350px;
     width: 320px;
     height: 100vh;
-    background: white;
-    box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+    background: ${themeColors.background};
+    color: ${themeColors.textPrimary};
+    box-shadow: -2px 0 10px rgba(0,0,0,${themeColors.isDark ? '0.3' : '0.1'});
     z-index: 10000;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     transition: right 0.3s ease;
     overflow-y: auto;
-    border-left: 1px solid #e0e0e0;
+    border-left: 1px solid ${themeColors.border};
   `;
 
   document.body.appendChild(qrSidebar);
@@ -496,7 +545,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// 生成二维码 - 按优先级：自定义API -> qrcode.js -> 三方API
+// 生成二维码 - 按用户要求的优先级逻辑
 async function generateQRCode(text) {
   console.log('Generating QR code for text:', JSON.stringify(text));
   console.log('Text character codes:', Array.from(text).map(char => `${char}(${char.charCodeAt(0)})`).join(', '));
@@ -518,52 +567,77 @@ async function generateQRCode(text) {
       const result = await getSettings();
       console.log('QR generation settings:', result);
 
-      // 优先级1: 自定义API（如果开启并成功保存过）
-      if (result.useCustomApi &&
+      // 检查自定义API是否已配置且有效
+      const isCustomApiConfigured = result.useCustomApi &&
           result.customApiUrl &&
           result.customApiUrl.includes('{TEXT}') &&
-          (result.customApiUrl.startsWith('http://') || result.customApiUrl.startsWith('https://'))) {
-        console.log('✅ Custom API is enabled and properly configured, using custom API');
+          (result.customApiUrl.startsWith('http://') || result.customApiUrl.startsWith('https://'));
+
+      if (result.useCustomApi && !isCustomApiConfigured) {
+        console.log('⚠️ Custom API is enabled but not properly configured:', {
+          hasUrl: !!result.customApiUrl,
+          hasTextPlaceholder: result.customApiUrl?.includes('{TEXT}'),
+          hasValidProtocol: result.customApiUrl?.startsWith('http://') || result.customApiUrl?.startsWith('https://')
+        });
+        showToast('自定义API配置不完整，请检查设置', 'warning');
+      }
+
+      // 根据自定义API开关状态确定优先级
+      if (result.useCustomApi && isCustomApiConfigured) {
+        // 自定义API开关开启且配置完整：自定义API -> 前端生成 -> 内置API
+        console.log('✅ Custom API enabled: trying custom API -> offline -> third-party');
+
+        // 优先级1: 自定义API
         try {
           const success = await tryCustomAPI(text, result);
           if (success) {
             console.log('✅ Custom API generation completed successfully');
             return;
           }
-          console.log('❌ Custom API failed but did not throw error, continuing to fallback methods');
+          console.log('❌ Custom API failed but did not throw error, falling back to offline generation');
         } catch (error) {
           console.error('❌ Custom API failed with error:', error);
           showToast('自定义API失败，使用备用方案', 'warning');
         }
+
+        // 优先级2: 本地qrcode.js库
+        console.log('📱 Falling back to local QRCode.js library');
+        try {
+          const success = await tryOfflineGeneration(text);
+          if (success) {
+            console.log('✅ Offline generation completed successfully');
+            return;
+          }
+          console.log('❌ Offline generation failed but did not throw error, continuing to third-party APIs');
+        } catch (error) {
+          console.error('❌ Offline generation failed with error:', error);
+        }
+
+        // 优先级3: 三方在线API
+        console.log('🌐 Falling back to third-party APIs');
+        tryThirdPartyAPIs(text);
+
       } else {
-        if (result.useCustomApi) {
-          console.log('⚠️ Custom API is enabled but not properly configured:', {
-            hasUrl: !!result.customApiUrl,
-            hasTextPlaceholder: result.customApiUrl?.includes('{TEXT}'),
-            hasValidProtocol: result.customApiUrl?.startsWith('http://') || result.customApiUrl?.startsWith('https://')
-          });
-          showToast('自定义API配置不完整，请检查设置', 'warning');
-        } else {
-          console.log('ℹ️ Custom API is disabled, using default generation methods');
-        }
-      }
+        // 自定义API开关关闭或未配置：前端生成 -> 内置API
+        console.log('ℹ️ Custom API disabled: trying offline -> third-party');
 
-      // 优先级2: 本地qrcode.js库
-      console.log('📱 Trying local QRCode.js library');
-      try {
-        const success = await tryOfflineGeneration(text);
-        if (success) {
-          console.log('✅ Offline generation completed successfully');
-          return;
+        // 优先级1: 本地qrcode.js库
+        console.log('📱 Trying local QRCode.js library');
+        try {
+          const success = await tryOfflineGeneration(text);
+          if (success) {
+            console.log('✅ Offline generation completed successfully');
+            return;
+          }
+          console.log('❌ Offline generation failed but did not throw error, continuing to third-party APIs');
+        } catch (error) {
+          console.error('❌ Offline generation failed with error:', error);
         }
-        console.log('❌ Offline generation failed but did not throw error, continuing to third-party APIs');
-      } catch (error) {
-        console.error('❌ Offline generation failed with error:', error);
-      }
 
-      // 优先级3: 三方在线API（通过background script）
-      console.log('🌐 Falling back to third-party APIs');
-      tryThirdPartyAPIs(text);
+        // 优先级2: 三方在线API
+        console.log('🌐 Falling back to third-party APIs');
+        tryThirdPartyAPIs(text);
+      }
 
     } catch (error) {
       console.error('❌ Error getting settings, falling back to offline generation:', error);
@@ -754,19 +828,22 @@ window.showToast = function(message, type = 'info') {
   const toast = document.createElement('div');
   toast.textContent = message;
 
+  // 获取主题颜色
+  const themeColors = getThemeColors();
+
   let backgroundColor;
   switch (type) {
     case 'success':
-      backgroundColor = '#4CAF50';
+      backgroundColor = themeColors.toastBg.success;
       break;
     case 'error':
-      backgroundColor = '#f44336';
+      backgroundColor = themeColors.toastBg.error;
       break;
     case 'warning':
-      backgroundColor = '#ff9800';
+      backgroundColor = themeColors.toastBg.warning;
       break;
     default:
-      backgroundColor = '#333';
+      backgroundColor = themeColors.toastBg.info;
   }
 
   toast.style.cssText = `
@@ -781,7 +858,7 @@ window.showToast = function(message, type = 'info') {
     z-index: 10002;
     animation: slideIn 0.3s ease;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 12px rgba(0,0,0,${themeColors.isDark ? '0.4' : '0.3'});
   `;
 
   document.body.appendChild(toast);

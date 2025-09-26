@@ -371,6 +371,130 @@
     .status-indicator.disabled {
       background: #6c757d;
     }
+
+    /* 深色模式支持 */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #1e1e1e;
+        color: #e0e0e0;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #4a5568 0%, #553c9a 100%);
+      }
+
+      .tabs {
+        background: #2d2d2d;
+        border-bottom: 1px solid #404040;
+      }
+
+      .tab {
+        color: #aaa;
+      }
+
+      .tab.active {
+        color: #60a5fa;
+        background: #1e1e1e;
+        box-shadow: 0 2px 8px rgba(96, 165, 250, 0.15);
+      }
+
+      .tab:hover:not(.active) {
+        background: #404040;
+        color: #ccc;
+      }
+
+      .tab.active:hover {
+        background: #1e1e1e;
+      }
+
+      .tabs::after {
+        background: #60a5fa;
+      }
+
+      .tab-content-inner {
+        background: #1e1e1e;
+      }
+
+      #qrcode {
+        background: #2d2d2d;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      }
+
+      .text-info {
+        background: #2d2d2d;
+        color: #e0e0e0;
+        border-left: 3px solid #60a5fa;
+      }
+
+      .btn-download {
+        background: #16a34a;
+      }
+
+      .btn-copy {
+        background: #2563eb;
+      }
+
+      .btn-clear {
+        background: #dc2626;
+      }
+
+      .btn-test {
+        background: #0891b2;
+      }
+
+      .btn-save {
+        background: #16a34a;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+      }
+
+      .empty-state {
+        color: #aaa;
+      }
+
+      .setting-group {
+        border-bottom: 1px solid #404040;
+      }
+
+      .setting-title {
+        color: #e0e0e0;
+      }
+
+      .setting-desc {
+        color: #aaa;
+      }
+
+      .form-label {
+        color: #ccc;
+      }
+
+      .form-input {
+        background: #2d2d2d;
+        color: #e0e0e0;
+        border: 1px solid #404040;
+      }
+
+      .form-input:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
+      }
+
+      .custom-api-section {
+        background: #2d2d2d;
+        border: 1px solid #404040;
+      }
+
+      .slider {
+        background-color: #666;
+      }
+
+      input:checked + .slider {
+        background-color: #16a34a;
+      }
+
+      button:hover {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+      }
+    }
   </style>
 </head>
 <body>
