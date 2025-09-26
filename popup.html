@@ -28,11 +28,13 @@
       font-weight: 500;
     }
 
+
     .tabs {
       display: flex;
       background: #f8f9fa;
       border-bottom: 1px solid #e9ecef;
       flex-shrink: 0;
+      position: relative;
     }
 
     .tab {
@@ -44,38 +46,96 @@
       background: none;
       font-size: 14px;
       color: #6c757d;
-      transition: all 0.2s;
+      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      position: relative;
+      z-index: 1;
     }
 
     .tab.active {
       color: #007bff;
       background: white;
-      border-bottom: 2px solid #007bff;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
     }
 
-    .tab:hover {
+    .tab:hover:not(.active) {
       background: #e9ecef;
+      transform: translateY(-0.5px);
+      color: #495057;
     }
 
     .tab.active:hover {
       background: white;
+      transform: translateY(-1px);
+    }
+
+    /* 动态下划线 */
+    .tabs::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 50%;
+      height: 2px;
+      background: #007bff;
+      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      transform: translateX(0);
+    }
+
+    .tabs.settings-active::after {
+      transform: translateX(100%);
+    }
+
+    .tab-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
     }
 
     .tab-content {
-      display: none;
-      flex: 1;
-      overflow-y: auto;
-      position: relative;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      pointer-events: none;
     }
 
     .tab-content.active {
-      display: flex;
-      flex-direction: column;
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: auto;
+    }
+
+    .tab-content.slide-out-left {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+
+    .tab-content.slide-out-right {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+
+    .tab-content.slide-in-right {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+
+    .tab-content.slide-in-left {
+      transform: translateX(-100%);
+      opacity: 0;
     }
 
     .tab-content-inner {
       padding: 20px;
       flex: 1;
+      overflow-y: auto;
     }
 
     .qr-container {
@@ -323,60 +383,62 @@
     <button class="tab" data-tab="settings">设置</button>
   </div>
 
-  <div id="qr-tab" class="tab-content active">
-    <div class="tab-content-inner">
-      <div id="content">
-        <div class="empty-state">
-          <div class="icon">📱</div>
-          <p>在网页中选择文字，然后点击绿色按钮生成二维码</p>
+  <div class="tab-container">
+    <div id="qr-tab" class="tab-content active">
+      <div class="tab-content-inner">
+        <div id="content">
+          <div class="empty-state">
+            <div class="icon">📱</div>
+            <p>在网页中选择文字，然后点击绿色按钮生成二维码</p>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div id="settings-tab" class="tab-content">
-    <div class="tab-content-inner">
-      <div class="setting-group">
-        <div class="setting-title">
-          <span class="status-indicator" id="button-status"></span>
-          🎯 选择按钮控制
+    <div id="settings-tab" class="tab-content">
+      <div class="tab-content-inner">
+        <div class="setting-group">
+          <div class="setting-title">
+            <span class="status-indicator" id="button-status"></span>
+            🎯 选择按钮控制
+          </div>
+          <div class="setting-desc">控制是否在选中文字时显示绿色生成按钮</div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="show-button-toggle" checked>
+            <span class="slider"></span>
+          </label>
         </div>
-        <div class="setting-desc">控制是否在选中文字时显示绿色生成按钮</div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="show-button-toggle" checked>
-          <span class="slider"></span>
-        </label>
+
+        <div class="setting-group">
+          <div class="setting-title">
+            <span class="status-indicator" id="api-status"></span>
+            🔧 自定义API
+          </div>
+          <div class="setting-desc">使用您自己的二维码生成API，提高隐私安全性</div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="custom-api-toggle">
+            <span class="slider"></span>
+          </label>
+
+          <div class="custom-api-section" id="custom-api-config" style="display: none; margin-top: 12px;">
+            <div class="form-group">
+              <label class="form-label">API 地址 (必须包含 {TEXT} 占位符)</label>
+              <input type="text" class="form-input" id="custom-api-url" placeholder="https://your-api.com/qr?text={TEXT}&size=200">
+            </div>
+            <div class="form-group">
+              <label class="form-label">请求头 (可选，JSON对象格式)</label>
+              <input type="text" class="form-input" id="custom-api-headers" placeholder='{"Authorization": "Bearer YOUR_TOKEN"}'>
+            </div>
+            <div class="form-group">
+              <label class="form-label">超时时间 (毫秒)</label>
+              <input type="number" class="form-input" id="custom-api-timeout" value="5000" min="1000" max="30000">
+            </div>
+            <button class="btn-test" id="test-custom-api">测试 API</button>
+          </div>
+        </div>
       </div>
-
-      <div class="setting-group">
-        <div class="setting-title">
-          <span class="status-indicator" id="api-status"></span>
-          🔧 自定义API
-        </div>
-        <div class="setting-desc">使用您自己的二维码生成API，提高隐私安全性</div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="custom-api-toggle">
-          <span class="slider"></span>
-        </label>
-
-        <div class="custom-api-section" id="custom-api-config" style="display: none; margin-top: 12px;">
-          <div class="form-group">
-            <label class="form-label">API 地址</label>
-            <input type="text" class="form-input" id="custom-api-url" placeholder="https://your-api.com/qr?text={TEXT}&size=200">
-          </div>
-          <div class="form-group">
-            <label class="form-label">请求头 (可选，JSON格式)</label>
-            <input type="text" class="form-input" id="custom-api-headers" placeholder='{"Authorization": "Bearer YOUR_TOKEN"}'>
-          </div>
-          <div class="form-group">
-            <label class="form-label">超时时间 (毫秒)</label>
-            <input type="number" class="form-input" id="custom-api-timeout" value="5000" min="1000" max="30000">
-          </div>
-          <button class="btn-test" id="test-custom-api">测试 API</button>
-        </div>
-      </div>
+      <button class="btn-save" id="save-settings">保存设置</button>
     </div>
-    <button class="btn-save" id="save-settings">保存设置</button>
   </div>
 
   <script src="popup.js"></script>

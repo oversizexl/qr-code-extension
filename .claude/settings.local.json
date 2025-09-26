@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "WebFetch(domain:api.qrserver.com)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

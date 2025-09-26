@@ -2,6 +2,8 @@ let selectedText = '';
 let qrCodeButton = null;
 let qrSidebar = null;
 let isButtonShowing = false;
+let sidebarJustShown = false; // 添加保护标志
+let isProcessingQR = false; // 全局防抖状态
 let extensionSettings = {
   showSelectionButton: true,
   useCustomApi: false
@@ -33,9 +35,42 @@ document.addEventListener('mouseup', function(event) {
   // 延迟执行以确保选择完成
   setTimeout(() => {
     const selection = window.getSelection();
-    const text = selection.toString().trim();
 
-    console.log('Selected text:', text); // 调试日志
+    if (selection.rangeCount === 0) {
+      console.log('No selection range found');
+      return;
+    }
+
+    // 获取原始文本（使用 toString()）
+    let text = selection.toString();
+    const originalText = text;
+
+    // 尝试从DOM获取原始文本内容
+    try {
+      const range = selection.getRangeAt(0);
+      const clonedContents = range.cloneContents();
+      const tempDiv = document.createElement('div');
+      tempDiv.appendChild(clonedContents);
+      const domText = tempDiv.textContent || tempDiv.innerText || '';
+
+      console.log('Selection.toString():', JSON.stringify(originalText));
+      console.log('DOM textContent:', JSON.stringify(domText));
+      console.log('Are they equal?:', originalText === domText);
+
+      // 如果DOM文本和selection文本不同，使用DOM文本
+      if (domText && domText !== originalText) {
+        console.log('Using DOM text instead of selection text');
+        text = domText;
+      }
+
+    } catch (error) {
+      console.log('Error getting DOM text, falling back to selection.toString():', error);
+    }
+
+    text = text.trim();
+
+    console.log('Final selected text:', JSON.stringify(text));
+    console.log('Text character codes:', Array.from(text).map(char => `${char}(${char.charCodeAt(0)})`).join(', '));
 
     if (text.length > 0) {
       selectedText = text;
@@ -49,10 +84,9 @@ document.addEventListener('mouseup', function(event) {
       const buttonY = rect.top - 10;   // 选中文本上方10px
 
       showQRButton(buttonX, buttonY, rect);
-    } else if (!isButtonShowing) {
-      // 只有在按钮不是正在显示状态时才隐藏
+    } else if (!qrSidebar) {
+      // 没有选中文字且侧边栏不存在时隐藏按钮
       hideQRButton();
-      hideSidebar();
     }
   }, 100);
 });
@@ -64,9 +98,8 @@ document.addEventListener('selectionchange', function() {
     const selection = window.getSelection();
     const text = selection.toString().trim();
 
-    if (text.length === 0 && !isButtonShowing) {
+    if (text.length === 0 && !qrSidebar) {
       hideQRButton();
-      hideSidebar();
     }
   }, 150);
 });
@@ -87,10 +120,13 @@ document.addEventListener('click', function(event) {
     const selection = window.getSelection();
     const text = selection.toString().trim();
 
-    // 如果没有选中文字，则隐藏
-    if (text.length === 0) {
+    // 如果有侧边栏且保护期已过，允许用户点击外部关闭
+    if (qrSidebar && !sidebarJustShown) {
+      hideSidebar(true); // 用户主动点击外部，强制关闭
+    }
+    // 如果没有选中文字且侧边栏不存在，则隐藏按钮
+    else if (text.length === 0 && !qrSidebar) {
       hideQRButton();
-      hideSidebar();
     }
   }, 200);
 });
@@ -249,29 +285,62 @@ function showQRButton(x, y, textRect) {
   qrCodeButton.addEventListener('click', function(e) {
     e.stopPropagation();
     e.preventDefault();
-    console.log('Button clicked, generating QR for:', selectedText); // 调试日志
-    generateQRCode(selectedText);
+
+    // 防抖检查 - 使用全局状态
+    if (isProcessingQR) {
+      console.log('🚫 Button click ignored - already processing QR request');
+      return;
+    }
+
+    console.log('Button clicked, generating QR for:', selectedText);
+
+    // 设置全局处理状态和视觉反馈
+    isProcessingQR = true;
+    this.style.background = '#45a049';
+    this.style.cursor = 'not-allowed';
+    this.innerHTML = '⏳ 生成中...';
+
+    // 设置标志防止其他事件干扰
+    isButtonShowing = true;
+
+    // 生成二维码
+    generateQRCode(selectedText).finally(() => {
+      // 2秒后重置处理状态
+      setTimeout(() => {
+        isProcessingQR = false;
+        if (qrCodeButton && qrCodeButton.parentNode) {
+          qrCodeButton.style.background = '#4CAF50';
+          qrCodeButton.style.cursor = 'pointer';
+          qrCodeButton.innerHTML = '📱 生成二维码';
+          console.log('🔓 QR processing lock released');
+        }
+      }, 2000);
+    });
   });
 
   // 增强的悬停效果
   qrCodeButton.addEventListener('mouseenter', function() {
-    this.style.background = '#45a049';
-    this.style.transform = 'translateY(-2px) scale(1.05)';
-    this.style.boxShadow = '0 6px 16px rgba(76, 175, 80, 0.4)';
+    if (!isProcessingQR) {
+      this.style.background = '#45a049';
+      this.style.transform = 'translateY(-2px) scale(1.05)';
+      this.style.boxShadow = '0 6px 16px rgba(76, 175, 80, 0.4)';
+    }
   });
 
   qrCodeButton.addEventListener('mouseleave', function() {
-    this.style.background = '#4CAF50';
-    this.style.transform = 'translateY(0) scale(1)';
-    this.style.boxShadow = '0 4px 12px rgba(76, 175, 80, 0.3)';
+    if (!isProcessingQR) {
+      this.style.background = '#4CAF50';
+      this.style.transform = 'translateY(0) scale(1)';
+      this.style.boxShadow = '0 4px 12px rgba(76, 175, 80, 0.3)';
+    }
   });
 
   document.body.appendChild(qrCodeButton);
   console.log('QR button shown'); // 调试日志
 
-  // 8秒后自动隐藏按钮
+  // 8秒后自动隐藏按钮（但不影响侧边栏）
   setTimeout(() => {
-    if (qrCodeButton && qrCodeButton.parentNode) {
+    if (qrCodeButton && qrCodeButton.parentNode && !qrSidebar && !isProcessingQR) {
       const selection = window.getSelection();
       const text = selection.toString().trim();
       if (text.length === 0) {
@@ -294,7 +363,13 @@ function hideQRButton() {
 // 显示侧边栏二维码
 function showSidebar(text, qrDataURL) {
   console.log('Showing sidebar with text:', text); // 调试日志
-  hideSidebar();
+
+  // 直接清理现有侧边栏，而不是使用hideSidebar()避免动画冲突
+  if (qrSidebar && qrSidebar.parentNode) {
+    qrSidebar.remove();
+    qrSidebar = null;
+    console.log('Previous sidebar cleaned up');
+  }
 
   qrSidebar = document.createElement('div');
   qrSidebar.id = 'qr-sidebar';
@@ -342,7 +417,7 @@ function showSidebar(text, qrDataURL) {
 
   closeBtn.addEventListener('click', function(e) {
     e.stopPropagation();
-    hideSidebar();
+    hideSidebar(true); // 强制隐藏，忽略保护期
   });
 
   copyBtn.addEventListener('click', function(e) {
@@ -364,23 +439,52 @@ function showSidebar(text, qrDataURL) {
     showToast('二维码已保存');
   });
 
-  // 动画显示
-  setTimeout(() => {
+  // 立即显示，避免闪现
+  requestAnimationFrame(() => {
     qrSidebar.style.right = '0px';
-  }, 10);
+    console.log('Sidebar animation started');
+  });
 
+  // 设置保护期，防止立即被隐藏
+  sidebarJustShown = true;
+  setTimeout(() => {
+    sidebarJustShown = false;
+    console.log('Sidebar protection period ended');
+  }, 300); // 300ms保护期，足够避免意外关闭但不影响用户体验
+
+  // 隐藏按钮并重置状态
   hideQRButton();
+  isButtonShowing = false;
 }
 
 // 隐藏侧边栏
-function hideSidebar() {
+function hideSidebar(forceHide = false) {
+  // 检查保护期（但允许强制隐藏）
+  if (sidebarJustShown && !forceHide) {
+    console.log('Sidebar hide blocked - protection period active');
+    return;
+  }
+
   if (qrSidebar && qrSidebar.parentNode) {
+    // 添加调试日志来跟踪谁在调用hideSidebar
+    console.trace('hideSidebar called');
+    console.log('Hiding sidebar, current state:', {
+      qrSidebar: !!qrSidebar,
+      isButtonShowing: isButtonShowing,
+      sidebarJustShown: sidebarJustShown,
+      selection: window.getSelection().toString().trim()
+    });
+
     qrSidebar.style.right = '-350px';
     setTimeout(() => {
       if (qrSidebar && qrSidebar.parentNode) {
         qrSidebar.remove();
         qrSidebar = null;
       }
+      // 重置状态
+      isButtonShowing = false;
+      sidebarJustShown = false;
+      console.log('Sidebar hidden and cleaned up');
     }, 300);
   }
 }
@@ -392,15 +496,197 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// 生成二维码
-function generateQRCode(text) {
-  console.log('Sending message to background:', text); // 调试日志
+// 生成二维码 - 按优先级：自定义API -> qrcode.js -> 三方API
+async function generateQRCode(text) {
+  console.log('Generating QR code for text:', JSON.stringify(text));
+  console.log('Text character codes:', Array.from(text).map(char => `${char}(${char.charCodeAt(0)})`).join(', '));
+
+  // 使用Promise包装chrome.storage.local.get以确保正确的异步处理
+  const getSettings = () => {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([
+        'useCustomApi',
+        'customApiUrl',
+        'customApiHeaders',
+        'customApiTimeout'
+      ], resolve);
+    });
+  };
+
+  (async () => {
+    try {
+      const result = await getSettings();
+      console.log('QR generation settings:', result);
+
+      // 优先级1: 自定义API（如果开启并成功保存过）
+      if (result.useCustomApi &&
+          result.customApiUrl &&
+          result.customApiUrl.includes('{TEXT}') &&
+          (result.customApiUrl.startsWith('http://') || result.customApiUrl.startsWith('https://'))) {
+        console.log('✅ Custom API is enabled and properly configured, using custom API');
+        try {
+          const success = await tryCustomAPI(text, result);
+          if (success) {
+            console.log('✅ Custom API generation completed successfully');
+            return;
+          }
+          console.log('❌ Custom API failed but did not throw error, continuing to fallback methods');
+        } catch (error) {
+          console.error('❌ Custom API failed with error:', error);
+          showToast('自定义API失败，使用备用方案', 'warning');
+        }
+      } else {
+        if (result.useCustomApi) {
+          console.log('⚠️ Custom API is enabled but not properly configured:', {
+            hasUrl: !!result.customApiUrl,
+            hasTextPlaceholder: result.customApiUrl?.includes('{TEXT}'),
+            hasValidProtocol: result.customApiUrl?.startsWith('http://') || result.customApiUrl?.startsWith('https://')
+          });
+          showToast('自定义API配置不完整，请检查设置', 'warning');
+        } else {
+          console.log('ℹ️ Custom API is disabled, using default generation methods');
+        }
+      }
+
+      // 优先级2: 本地qrcode.js库
+      console.log('📱 Trying local QRCode.js library');
+      try {
+        const success = await tryOfflineGeneration(text);
+        if (success) {
+          console.log('✅ Offline generation completed successfully');
+          return;
+        }
+        console.log('❌ Offline generation failed but did not throw error, continuing to third-party APIs');
+      } catch (error) {
+        console.error('❌ Offline generation failed with error:', error);
+      }
+
+      // 优先级3: 三方在线API（通过background script）
+      console.log('🌐 Falling back to third-party APIs');
+      tryThirdPartyAPIs(text);
+
+    } catch (error) {
+      console.error('❌ Error getting settings, falling back to offline generation:', error);
+      try {
+        await tryOfflineGeneration(text);
+      } catch (fallbackError) {
+        console.error('❌ Fallback offline generation also failed:', fallbackError);
+        showToast('二维码生成失败', 'error');
+      }
+    }
+  })();
+}
+
+// 尝试使用自定义API生成二维码
+async function tryCustomAPI(text, settings) {
+  console.log('🔧 Requesting custom API generation from background script');
+
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({
+      action: 'generateCustomAPI',
+      text: text,
+      apiConfig: {
+        url: settings.customApiUrl,
+        headers: settings.customApiHeaders,
+        timeout: settings.customApiTimeout
+      }
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('❌ Background script communication error:', chrome.runtime.lastError);
+        reject(new Error('Background script communication failed'));
+        return;
+      }
+
+      if (response && response.success) {
+        console.log('✅ Custom API generation completed successfully via background');
+        showSidebar(text, response.qrDataURL);
+
+        // 保存到存储
+        chrome.storage.local.set({
+          lastText: text,
+          lastQRCode: response.qrDataURL
+        });
+
+        resolve(true);
+      } else {
+        console.error('❌ Custom API failed via background:', response?.error || 'Unknown error');
+        reject(new Error(response?.error || 'Custom API failed'));
+      }
+    });
+  });
+}
+
+// 尝试使用本地qrcode.js库生成
+async function tryOfflineGeneration(text) {
+  console.log('📱 Starting offline QR generation for text:', JSON.stringify(text));
+  console.log('📱 Text character codes:', Array.from(text).map(char => `${char}(${char.charCodeAt(0)})`).join(', '));
+
+  return new Promise((resolve, reject) => {
+    try {
+      const qrCodeDiv = document.createElement('div');
+      qrCodeDiv.style.display = 'none';
+      document.body.appendChild(qrCodeDiv);
+
+      console.log('📱 Creating QRCode with text:', JSON.stringify(text));
+
+      const qr = new QRCode(qrCodeDiv, {
+        text: text,
+        width: 256,
+        height: 256,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      setTimeout(() => {
+        try {
+          const qrImage = qrCodeDiv.querySelector('img');
+          if (qrImage && qrImage.src) {
+            console.log('📱 QR image generated successfully');
+
+            // 验证生成的二维码中的文本
+            console.log('📱 QR image src length:', qrImage.src.length);
+
+            showSidebar(text, qrImage.src);
+
+            // 保存到存储
+            chrome.storage.local.set({
+              lastText: text,
+              lastQRCode: qrImage.src
+            });
+
+            console.log('✅ Offline generation successful for text:', JSON.stringify(text));
+            document.body.removeChild(qrCodeDiv);
+            resolve(true);
+          } else {
+            console.error('❌ Failed to generate QR image element');
+            document.body.removeChild(qrCodeDiv);
+            reject(new Error('Failed to generate QR image'));
+          }
+        } catch (error) {
+          console.error('❌ Error in offline generation:', error);
+          document.body.removeChild(qrCodeDiv);
+          reject(error);
+        }
+      }, 500);
+
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// 使用三方API（通过background script）
+function tryThirdPartyAPIs(text) {
   chrome.runtime.sendMessage({
     action: 'generateQR',
     text: text
   }, (response) => {
     if (chrome.runtime.lastError) {
-      console.error('Runtime error:', chrome.runtime.lastError);
+      console.error('All QR generation methods failed:', chrome.runtime.lastError);
+      showToast('二维码生成失败，请检查网络连接', 'error');
+    } else {
+      console.log('✅ Third-party API generation initiated');
     }
   });
 }
@@ -412,16 +698,33 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     showSidebar(request.text, request.qrDataURL);
     sendResponse({success: true});
   } else if (request.action === 'updateSettings') {
-    // 更新设置
-    extensionSettings = request.settings;
-    console.log('Settings updated:', extensionSettings);
+    // 更新设置（只更新传递的设置，保留其他设置）
+    console.log('Received settings update:', request.settings);
+
+    // 合并设置而不是完全替换
+    extensionSettings = {
+      ...extensionSettings,
+      ...request.settings
+    };
+
+    console.log('Settings after update:', extensionSettings);
 
     // 如果禁用了按钮显示，立即隐藏当前显示的按钮
-    if (!extensionSettings.showSelectionButton) {
+    if (request.settings.hasOwnProperty('showSelectionButton') && !extensionSettings.showSelectionButton) {
       hideQRButton();
     }
 
     sendResponse({success: true});
+  } else if (request.action === 'generateOfflineQR') {
+    // 处理右键菜单的二维码生成请求（使用新的优先级逻辑）
+    console.log('Content - Generating QR for right-click:', request.text);
+    try {
+      generateQRCode(request.text); // 使用统一的生成逻辑
+      sendResponse({success: true});
+    } catch (error) {
+      console.error('QR generation failed:', error);
+      sendResponse({success: false, error: error.message});
+    }
   }
   return true;
 });
@@ -447,14 +750,30 @@ window.copyText = function(text) {
 // 移除不再需要的全局函数
 // window.closeSidebar 已通过事件监听器替代
 
-window.showToast = function(message) {
+window.showToast = function(message, type = 'info') {
   const toast = document.createElement('div');
   toast.textContent = message;
+
+  let backgroundColor;
+  switch (type) {
+    case 'success':
+      backgroundColor = '#4CAF50';
+      break;
+    case 'error':
+      backgroundColor = '#f44336';
+      break;
+    case 'warning':
+      backgroundColor = '#ff9800';
+      break;
+    default:
+      backgroundColor = '#333';
+  }
+
   toast.style.cssText = `
     position: fixed;
     top: 20px;
     right: 20px;
-    background: #333;
+    background: ${backgroundColor};
     color: white;
     padding: 12px 20px;
     border-radius: 4px;
@@ -462,6 +781,7 @@ window.showToast = function(message) {
     z-index: 10002;
     animation: slideIn 0.3s ease;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   `;
 
   document.body.appendChild(toast);

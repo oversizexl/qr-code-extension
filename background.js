@@ -25,8 +25,27 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log('Background received message:', request);
 
   if (request.action === 'generateQR') {
-    generateQRCodeWithMultipleAPIs(request.text, sender.tab.id);
-    sendResponse({success: true});
+    // 检查是否已经有生成好的二维码（离线生成）
+    if (request.qrDataURL) {
+      console.log('Using offline generated QR code');
+      // 直接使用离线生成的二维码数据
+      sendQRToTab(request.text, request.qrDataURL, sender.tab.id);
+      sendResponse({success: true, source: 'offline'});
+    } else {
+      console.log('Generating QR code online');
+      // 使用在线API生成二维码
+      generateQRCodeWithMultipleAPIs(request.text, sender.tab.id);
+      sendResponse({success: true, source: 'online'});
+    }
+  } else if (request.action === 'generateCustomAPI') {
+    // 处理自定义API请求
+    console.log('Background - Processing custom API request:', request.apiConfig);
+    generateCustomAPIQR(request.text, request.apiConfig).then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      sendResponse({success: false, error: error.message});
+    });
+    return true; // 保持消息通道开放用于异步响应
   } else if (request.action === 'testCustomApi') {
     // 测试自定义API
     testCustomApiEndpoint(request.apiConfig, request.testText).then(result => {
@@ -54,25 +73,41 @@ async function generateQRCodeWithMultipleAPIs(text, tabId) {
     ], resolve);
   });
 
-  if (settings.useCustomApi && settings.customApiUrl) {
-    console.log('Using custom API:', settings.customApiUrl);
+  console.log('Background - loaded settings:', settings);
 
-    const customApiConfig = {
-      name: 'Custom API',
-      url: (text) => settings.customApiUrl.replace('{TEXT}', encodeURIComponent(text)),
-      timeout: settings.customApiTimeout || 5000,
-      headers: settings.customApiHeaders ? JSON.parse(settings.customApiHeaders) : undefined
-    };
+  if (settings.useCustomApi &&
+      settings.customApiUrl &&
+      settings.customApiUrl.includes('{TEXT}') &&
+      (settings.customApiUrl.startsWith('http://') || settings.customApiUrl.startsWith('https://'))) {
+    console.log('✅ Background - Using custom API:', settings.customApiUrl);
 
     try {
-      const success = await generateQRCodeAPI(text, tabId, customApiConfig);
-      if (success) {
+      const result = await generateCustomAPIQR(text, {
+        url: settings.customApiUrl,
+        headers: settings.customApiHeaders,
+        timeout: settings.customApiTimeout
+      });
+
+      if (result.success) {
         console.log(`✅ QR generated successfully with custom API in ${Date.now() - startTime}ms`);
+        // 直接发送到tab，因为我们已经有了qrDataURL
+        sendQRToTab(text, result.qrDataURL, tabId);
         return;
       }
+      console.log('❌ Custom API returned false but did not throw error');
     } catch (error) {
       console.log(`❌ Custom API failed:`, error.message);
       // 继续使用默认API作为备用
+    }
+  } else {
+    if (settings.useCustomApi) {
+      console.log('⚠️ Background - Custom API is enabled but not properly configured:', {
+        hasUrl: !!settings.customApiUrl,
+        hasTextPlaceholder: settings.customApiUrl?.includes('{TEXT}'),
+        hasValidProtocol: settings.customApiUrl?.startsWith('http://') || settings.customApiUrl?.startsWith('https://')
+      });
+    } else {
+      console.log('ℹ️ Background - Custom API is disabled, using default APIs');
     }
   }
 
@@ -165,7 +200,7 @@ function sendQRToTab(text, qrDataURL, tabId) {
     action: 'showQRSidebar',
     text: text,
     qrDataURL: qrDataURL
-  }, (response) => {
+  }, () => {
     if (chrome.runtime.lastError) {
       console.error('Failed to send message to tab:', chrome.runtime.lastError);
     } else {
@@ -247,6 +282,91 @@ function generateTextFallback(text, tabId) {
   });
 }
 
+// 处理自定义API二维码生成
+async function generateCustomAPIQR(text, apiConfig) {
+  console.log('🔧 Background - Starting custom API generation with config:', apiConfig);
+
+  return new Promise(async (resolve, reject) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.log('⏰ Background - Custom API request timed out');
+      }, apiConfig.timeout || 5000);
+
+      const fetchOptions = {
+        signal: controller.signal,
+        method: 'GET'
+      };
+
+      // 添加自定义请求头
+      if (apiConfig.headers) {
+        try {
+          fetchOptions.headers = typeof apiConfig.headers === 'string'
+            ? JSON.parse(apiConfig.headers)
+            : apiConfig.headers;
+          console.log('📋 Background - Using custom headers:', fetchOptions.headers);
+        } catch (e) {
+          console.warn('⚠️ Background - Invalid custom headers, ignoring:', e);
+        }
+      }
+
+      const url = apiConfig.url.replace('{TEXT}', encodeURIComponent(text));
+      console.log('🌐 Background - Fetching from custom API:', url);
+
+      const response = await fetch(url, fetchOptions);
+      clearTimeout(timeoutId);
+
+      console.log('📡 Background - Custom API response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      console.log('📄 Background - Custom API content type:', contentType);
+
+      if (!contentType || !contentType.includes('image')) {
+        throw new Error(`Invalid content type: ${contentType}. Expected image/* but got ${contentType}`);
+      }
+
+      const blob = await response.blob();
+      console.log('📦 Background - Custom API blob size:', blob.size);
+
+      if (blob.size === 0) {
+        throw new Error('Empty response from custom API');
+      }
+
+      // 转换为DataURL
+      const reader = new FileReader();
+      reader.onloadend = function() {
+        const qrDataURL = reader.result;
+        console.log('✅ Background - Custom API QR data URL generated, length:', qrDataURL.length);
+        resolve({
+          success: true,
+          qrDataURL: qrDataURL,
+          source: 'custom-api'
+        });
+      };
+
+      reader.onerror = (error) => {
+        console.error('❌ Background - Failed to read blob from custom API:', error);
+        reject(new Error('Failed to read blob from custom API'));
+      };
+
+      reader.readAsDataURL(blob);
+
+    } catch (error) {
+      console.error('❌ Background - Custom API error:', error);
+      if (error.name === 'AbortError') {
+        reject(new Error('Custom API request timeout'));
+      } else {
+        reject(error);
+      }
+    }
+  });
+}
+
 // 安装时创建右键菜单
 chrome.runtime.onInstalled.addListener(function() {
   chrome.contextMenus.create({
@@ -258,59 +378,27 @@ chrome.runtime.onInstalled.addListener(function() {
 
 // 测试自定义API端点
 async function testCustomApiEndpoint(apiConfig, testText) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), apiConfig.timeout);
+  console.log('🧪 Background - Testing custom API endpoint');
 
-      const fetchOptions = {
-        signal: controller.signal,
-        method: 'GET'
-      };
-
-      // 如果API需要headers
-      if (apiConfig.headers) {
-        fetchOptions.headers = apiConfig.headers;
-      }
-
-      const url = apiConfig.url.replace('{TEXT}', encodeURIComponent(testText));
-      console.log('Testing API URL:', url);
-
-      const response = await fetch(url, fetchOptions);
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        reject(new Error(`HTTP ${response.status}: ${response.statusText}`));
-        return;
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('image')) {
-        reject(new Error(`Invalid content type: ${contentType}`));
-        return;
-      }
-
-      const blob = await response.blob();
-      if (blob.size === 0) {
-        reject(new Error('Empty response'));
-        return;
-      }
-
-      resolve({success: true, message: 'API测试成功'});
-
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        reject(new Error('Request timeout'));
-      } else {
-        reject(error);
-      }
+  // 重用generateCustomAPIQR函数来测试API
+  try {
+    const result = await generateCustomAPIQR(testText, apiConfig);
+    if (result.success) {
+      return {success: true, message: 'API测试成功'};
+    } else {
+      throw new Error('API test failed');
     }
-  });
+  } catch (error) {
+    throw error;
+  }
 }
 
 // 处理右键菜单点击
 chrome.contextMenus.onClicked.addListener(function(info, tab) {
   if (info.menuItemId === "generateQRFromSelection") {
+    console.log('Background - Right-click QR generation requested for:', info.selectionText);
+
+    // 直接使用统一的API生成逻辑（包括自定义API支持）
     generateQRCodeWithMultipleAPIs(info.selectionText, tab.id);
   }
 });
