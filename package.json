@@ -1,6 +1,6 @@
 {
   "name": "qr-code-extension",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "在任意网页选择文字，一键生成二维码。支持右键菜单、历史记录管理，方便手机扫码获取内容。",
   "scripts": {
     "dev": "node scripts/build.js",
